@@ -1,16 +1,19 @@
 package com.martin;
 
 import com.google.common.collect.Sets;
+import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
+import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
+import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
+import org.apache.http.impl.nio.reactor.DefaultConnectingIOReactor;
+import org.apache.http.nio.reactor.IOReactorException;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.http.client.HttpComponentsAsyncClientHttpRequestFactory;
+import org.springframework.web.client.AsyncRestTemplate;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 /**
  * Hello world!
@@ -18,49 +21,65 @@ import java.util.concurrent.Future;
  */
 public class App 
 {
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
+
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
+    private static final List<String> RESULTS = Collections.synchronizedList(new ArrayList<>());
 
-    public static void main( String[] args ) throws ExecutionException, InterruptedException
+    public static void main( String[] args ) throws Exception
     {
-        // New threads are created if no thread is available, if there is idle thread then it is reused
-        ExecutorService executorService = Executors.newCachedThreadPool();
+        AsyncRestTemplate asyncRestTemplate = createAsyncRestTemplate();
 
-        RestTemplate restTemplate = new RestTemplate();
-
+        System.out.println("Started");
         long start = System.currentTimeMillis();
 
-        List<Future<?>> futures = new ArrayList<>();
-
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < NUMBER_OF_CONCURRENT_REQUESTS; i++)
         {
-            // Asynchronous
-            Future<?> future = executorService.submit(() -> callSlowEndpoint(restTemplate));
-
-            futures.add(future);
+            callSlowEndpoint(asyncRestTemplate);
         }
 
-        for (Future<?> future : futures)
+
+        while (RESULTS.size() != NUMBER_OF_CONCURRENT_REQUESTS)
         {
-            future.get();
+            // wait for the calls to finish
         }
 
         long end = System.currentTimeMillis();
 
         System.out.println("Calls took " + (end - start) + " milliseconds to finish.");
         System.out.println(THREAD_NAMES.size() + " threads were used.");
-
-        executorService.shutdown();
     }
 
-    private static String callSlowEndpoint(RestTemplate restTemplate)
+    private static AsyncRestTemplate createAsyncRestTemplate() throws IOReactorException
     {
-        // Blocking background thread
-        ResponseEntity<String> responseEntity = restTemplate.getForEntity("http://localhost:8080/slow", String.class);
+        PoolingNHttpClientConnectionManager connectionManager = new PoolingNHttpClientConnectionManager(
+                new DefaultConnectingIOReactor());
+
+        connectionManager.setMaxTotal(NUMBER_OF_CONCURRENT_REQUESTS);
+        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_CONCURRENT_REQUESTS);
+
+        CloseableHttpAsyncClient httpclient = HttpAsyncClientBuilder.create()
+                                                                    .setConnectionManager(connectionManager)
+                                                                    .build();
+
+        return new AsyncRestTemplate(new HttpComponentsAsyncClientHttpRequestFactory(httpclient));
+    }
+
+    private static void callSlowEndpoint(AsyncRestTemplate asyncRestTemplate)
+    {
+        // non-blocking
+        asyncRestTemplate.getForEntity("http://localhost:8080/slow", String.class)
+                         .addCallback(App::handleSuccess, Throwable::printStackTrace);
+    }
+
+    private static void handleSuccess(ResponseEntity<String> responseEntity)
+    {
+        RESULTS.add(responseEntity.getBody());
 
         String threadName = Thread.currentThread().getName();
 
-        THREAD_NAMES.add(threadName);
+//        System.out.println(threadName);
 
-        return responseEntity.getBody();
+        THREAD_NAMES.add(threadName);
     }
 }
