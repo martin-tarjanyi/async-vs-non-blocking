@@ -1,7 +1,12 @@
 package com.martin;
 
 import com.google.common.collect.Sets;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
@@ -18,6 +23,8 @@ import java.util.concurrent.Future;
  */
 public class App 
 {
+    private static final int NUMBER_OF_REQUESTS = 100;
+
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
 
     public static void main( String[] args ) throws ExecutionException, InterruptedException
@@ -25,13 +32,13 @@ public class App
         // New threads are created if no thread is available, if there is idle thread then it is reused
         ExecutorService executorService = Executors.newCachedThreadPool();
 
-        RestTemplate restTemplate = new RestTemplate();
+        RestTemplate restTemplate = createRestTemplate();
 
         long start = System.currentTimeMillis();
 
         List<Future<?>> futures = new ArrayList<>();
 
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < NUMBER_OF_REQUESTS; i++)
         {
             // Asynchronous
             Future<?> future = executorService.submit(() -> callSlowEndpoint(restTemplate));
@@ -50,6 +57,19 @@ public class App
         System.out.println(THREAD_NAMES.size() + " threads were used.");
 
         executorService.shutdown();
+    }
+
+    private static RestTemplate createRestTemplate()
+    {
+        PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
+        connectionManager.setMaxTotal(NUMBER_OF_REQUESTS);
+        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_REQUESTS);
+
+        CloseableHttpClient httpClient = HttpClientBuilder.create().setConnectionManager(connectionManager).build();
+
+        ClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory(httpClient);
+
+        return new RestTemplate(factory);
     }
 
     private static String callSlowEndpoint(RestTemplate restTemplate)
