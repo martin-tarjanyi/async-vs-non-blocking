@@ -21,7 +21,7 @@ import java.util.Set;
  */
 public class App 
 {
-    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 3000;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
     private static final List<String> RESULTS = Collections.synchronizedList(new ArrayList<>());
@@ -55,8 +55,8 @@ public class App
         PoolingNHttpClientConnectionManager connectionManager = new PoolingNHttpClientConnectionManager(
                 new DefaultConnectingIOReactor());
 
-        connectionManager.setMaxTotal(NUMBER_OF_CONCURRENT_REQUESTS);
-        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_CONCURRENT_REQUESTS);
+        connectionManager.setMaxTotal(NUMBER_OF_CONCURRENT_REQUESTS + 500);
+        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_CONCURRENT_REQUESTS + 500);
 
         CloseableHttpAsyncClient httpclient = HttpAsyncClientBuilder.create()
                                                                     .setConnectionManager(connectionManager)
@@ -67,9 +67,9 @@ public class App
 
     private static void callSlowEndpoint(AsyncRestTemplate asyncRestTemplate)
     {
-        // non-blocking
+        // non-blocking IO
         asyncRestTemplate.getForEntity("http://localhost:8080/slow", String.class)
-                         .addCallback(App::handleSuccess, Throwable::printStackTrace);
+                         .addCallback(App::handleSuccess, throwable -> {throwable.printStackTrace(); RESULTS.add("error");});
     }
 
     private static void handleSuccess(ResponseEntity<String> responseEntity)
