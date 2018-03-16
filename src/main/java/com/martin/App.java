@@ -1,42 +1,34 @@
 package com.martin;
 
 import com.google.common.collect.Sets;
-import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
-import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
-import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
-import org.apache.http.impl.nio.reactor.DefaultConnectingIOReactor;
-import org.apache.http.nio.reactor.IOReactorException;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.HttpComponentsAsyncClientHttpRequestFactory;
-import org.springframework.web.client.AsyncRestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
  * Hello world!
- *
  */
-public class App 
+public class App
 {
-    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 6000;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 2000;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
-    private static final Set<String> RESULTS = Collections.synchronizedSet(new HashSet<>());
+    private static final Collection<String> RESULTS = Collections.synchronizedList(new ArrayList<>());
 
-    public static void main( String[] args ) throws Exception
+    public static void main(String[] args)
     {
-        AsyncRestTemplate asyncRestTemplate = createAsyncRestTemplate();
+        WebClient webClient = createWebClient();
 
         System.out.println("Started");
         long start = System.currentTimeMillis();
 
         for (int i = 0; i < NUMBER_OF_CONCURRENT_REQUESTS; i++)
         {
-            callSlowEndpoint(asyncRestTemplate);
+            callSlowEndpoint(webClient);
         }
-
 
         while (RESULTS.size() != NUMBER_OF_CONCURRENT_REQUESTS)
         {
@@ -49,35 +41,33 @@ public class App
         System.out.println(THREAD_NAMES.size() + " threads were used.");
     }
 
-    private static AsyncRestTemplate createAsyncRestTemplate() throws IOReactorException
+    private static WebClient createWebClient()
     {
-        PoolingNHttpClientConnectionManager connectionManager = new PoolingNHttpClientConnectionManager(
-                new DefaultConnectingIOReactor());
-
-        connectionManager.setMaxTotal(NUMBER_OF_CONCURRENT_REQUESTS);
-        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_CONCURRENT_REQUESTS);
-
-        CloseableHttpAsyncClient httpclient = HttpAsyncClientBuilder.create()
-                                                                    .setConnectionManager(connectionManager)
-                                                                    .build();
-
-        return new AsyncRestTemplate(new HttpComponentsAsyncClientHttpRequestFactory(httpclient));
+        return WebClient.create();
     }
 
-    private static void callSlowEndpoint(AsyncRestTemplate asyncRestTemplate)
+    private static void callSlowEndpoint(WebClient webClient)
     {
         // non-blocking IO
-        asyncRestTemplate.getForEntity("http://localhost:8080/slow", String.class)
-                         .addCallback(App::handleSuccess, throwable -> {throwable.printStackTrace(); RESULTS.add("error");});
+        webClient.get()
+                 .uri("http://localhost:8080/slow")
+                 .exchange()
+                 .flatMap(clientResponse -> clientResponse.bodyToMono(String.class))
+                 .subscribe(App::handleSuccess, throwable ->
+                 {
+                     throwable.printStackTrace();
+                     RESULTS.add("error");
+                 });
     }
 
-    private static void handleSuccess(ResponseEntity<String> responseEntity)
+    private static void handleSuccess(String body)
     {
-        RESULTS.add(responseEntity.getBody());
+        RESULTS.add(body);
 
-        String threadName = Thread.currentThread().getName();
+        String threadName = Thread.currentThread()
+                                  .getName();
 
-        System.out.println(threadName);
+//        System.out.println(threadName);
 
         THREAD_NAMES.add(threadName);
     }
