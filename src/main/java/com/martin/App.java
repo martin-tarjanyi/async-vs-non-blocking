@@ -10,9 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsAsyncClientHttpRequestFactory;
 import org.springframework.web.client.AsyncRestTemplate;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -21,10 +20,10 @@ import java.util.Set;
  */
 public class App 
 {
-    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 3000;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 6000;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
-    private static final List<String> RESULTS = Collections.synchronizedList(new ArrayList<>());
+    private static final Set<String> RESULTS = Collections.synchronizedSet(new HashSet<>());
 
     public static void main( String[] args ) throws Exception
     {
@@ -55,8 +54,8 @@ public class App
         PoolingNHttpClientConnectionManager connectionManager = new PoolingNHttpClientConnectionManager(
                 new DefaultConnectingIOReactor());
 
-        connectionManager.setMaxTotal(NUMBER_OF_CONCURRENT_REQUESTS + 500);
-        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_CONCURRENT_REQUESTS + 500);
+        connectionManager.setMaxTotal(NUMBER_OF_CONCURRENT_REQUESTS);
+        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_CONCURRENT_REQUESTS);
 
         CloseableHttpAsyncClient httpclient = HttpAsyncClientBuilder.create()
                                                                     .setConnectionManager(connectionManager)
@@ -78,7 +77,7 @@ public class App
 
         String threadName = Thread.currentThread().getName();
 
-//        System.out.println(threadName);
+        System.out.println(threadName);
 
         THREAD_NAMES.add(threadName);
     }
