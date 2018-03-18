@@ -23,7 +23,7 @@ import java.util.concurrent.Future;
  */
 public class App 
 {
-    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 500;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
 
