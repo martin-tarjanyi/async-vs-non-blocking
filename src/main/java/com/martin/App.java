@@ -14,18 +14,14 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Hello world!
- *
- */
-public class App 
+public class App
 {
-    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 6000;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
     private static final Set<String> RESULTS = Collections.synchronizedSet(new HashSet<>());
 
-    public static void main( String[] args ) throws Exception
+    public static void main(String[] args) throws Exception
     {
         AsyncRestTemplate asyncRestTemplate = createAsyncRestTemplate();
 
@@ -37,7 +33,7 @@ public class App
             callSlowEndpoint(asyncRestTemplate);
         }
 
-
+        // clumsy waiting
         while (RESULTS.size() != NUMBER_OF_CONCURRENT_REQUESTS)
         {
             // wait for the calls to finish
@@ -46,7 +42,7 @@ public class App
         long end = System.currentTimeMillis();
 
         System.out.println("Calls took " + (end - start) + " milliseconds to finish.");
-        System.out.println(THREAD_NAMES.size() + " threads were used.");
+        System.out.println(THREAD_NAMES.size() + " threads were used: " + THREAD_NAMES);
     }
 
     private static AsyncRestTemplate createAsyncRestTemplate() throws IOReactorException
@@ -68,7 +64,11 @@ public class App
     {
         // non-blocking IO
         asyncRestTemplate.getForEntity("http://localhost:8080/slow", String.class)
-                         .addCallback(App::handleSuccess, throwable -> {throwable.printStackTrace(); RESULTS.add("error");});
+                         .addCallback(App::handleSuccess, throwable ->
+                         {
+                             throwable.printStackTrace();
+                             RESULTS.add("error");
+                         });
     }
 
     private static void handleSuccess(ResponseEntity<String> responseEntity)
@@ -77,7 +77,7 @@ public class App
 
         String threadName = Thread.currentThread().getName();
 
-        System.out.println(threadName);
+//        System.out.println(threadName);
 
         THREAD_NAMES.add(threadName);
     }
