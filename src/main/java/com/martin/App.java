@@ -23,22 +23,24 @@ import java.util.concurrent.Future;
  */
 public class App 
 {
-    private static final int NUMBER_OF_REQUESTS = 100;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 500;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
 
     public static void main( String[] args ) throws ExecutionException, InterruptedException
     {
         // New threads are created if no thread is available, if there is idle thread then it is reused
-        ExecutorService executorService = Executors.newCachedThreadPool();
+        ExecutorService executorService = Executors.newFixedThreadPool(NUMBER_OF_CONCURRENT_REQUESTS);
 
         RestTemplate restTemplate = createRestTemplate();
 
         long start = System.currentTimeMillis();
 
+        System.out.println("Started...");
+
         List<Future<?>> futures = new ArrayList<>();
 
-        for (int i = 0; i < NUMBER_OF_REQUESTS; i++)
+        for (int i = 0; i < NUMBER_OF_CONCURRENT_REQUESTS; i++)
         {
             // Asynchronous
             Future<?> future = executorService.submit(() -> callSlowEndpoint(restTemplate));
@@ -62,8 +64,8 @@ public class App
     private static RestTemplate createRestTemplate()
     {
         PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
-        connectionManager.setMaxTotal(NUMBER_OF_REQUESTS);
-        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_REQUESTS);
+        connectionManager.setMaxTotal(NUMBER_OF_CONCURRENT_REQUESTS);
+        connectionManager.setDefaultMaxPerRoute(NUMBER_OF_CONCURRENT_REQUESTS);
 
         CloseableHttpClient httpClient = HttpClientBuilder.create().setConnectionManager(connectionManager).build();
 
