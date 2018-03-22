@@ -10,8 +10,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsAsyncClientHttpRequestFactory;
 import org.springframework.web.client.AsyncRestTemplate;
 
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class App
@@ -19,7 +20,7 @@ public class App
     private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
-    private static final Set<String> RESULTS = Collections.synchronizedSet(new HashSet<>());
+    private static final List<String> RESULTS = Collections.synchronizedList(new ArrayList<>());
 
     public static void main(String[] args) throws Exception
     {
