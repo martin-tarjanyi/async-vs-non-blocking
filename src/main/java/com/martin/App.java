@@ -14,7 +14,7 @@ import java.util.concurrent.CountDownLatch;
 
 public class App
 {
-    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 300;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
 
