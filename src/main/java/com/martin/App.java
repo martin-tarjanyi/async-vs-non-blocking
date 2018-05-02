@@ -6,26 +6,25 @@ import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
 import org.apache.http.impl.nio.reactor.DefaultConnectingIOReactor;
 import org.apache.http.nio.reactor.IOReactorException;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsAsyncClientHttpRequestFactory;
 import org.springframework.web.client.AsyncRestTemplate;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
 public class App
 {
-    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 300;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
-    private static final Set<String> RESULTS = Collections.synchronizedSet(new HashSet<>());
+
+    private static final CountDownLatch COUNT_DOWN_LATCH = new CountDownLatch(NUMBER_OF_CONCURRENT_REQUESTS);
 
     public static void main(String[] args) throws Exception
     {
         AsyncRestTemplate asyncRestTemplate = createAsyncRestTemplate();
 
-        System.out.println("Started");
+        System.out.println("Started executing " + NUMBER_OF_CONCURRENT_REQUESTS + " requests...");
         long start = System.currentTimeMillis();
 
         for (int i = 0; i < NUMBER_OF_CONCURRENT_REQUESTS; i++)
@@ -33,11 +32,7 @@ public class App
             callSlowEndpoint(asyncRestTemplate);
         }
 
-        // clumsy waiting
-        while (RESULTS.size() != NUMBER_OF_CONCURRENT_REQUESTS)
-        {
-            // wait for the calls to finish
-        }
+        COUNT_DOWN_LATCH.await();
 
         long end = System.currentTimeMillis();
 
@@ -62,23 +57,24 @@ public class App
 
     private static void callSlowEndpoint(AsyncRestTemplate asyncRestTemplate)
     {
-        // non-blocking IO
+        // non-blocking
         asyncRestTemplate.getForEntity("http://localhost:8080/slow", String.class)
-                         .addCallback(App::handleSuccess, throwable ->
-                         {
-                             throwable.printStackTrace();
-                             RESULTS.add("error");
-                         });
+                         .addCallback(response -> handleSuccess(), e -> handleError(e));
     }
 
-    private static void handleSuccess(ResponseEntity<String> responseEntity)
+    private static void handleSuccess()
     {
-        RESULTS.add(responseEntity.getBody());
+        COUNT_DOWN_LATCH.countDown();
 
         String threadName = Thread.currentThread().getName();
 
-//        System.out.println(threadName);
-
         THREAD_NAMES.add(threadName);
+    }
+
+    private static void handleError(Throwable throwable)
+    {
+        COUNT_DOWN_LATCH.countDown();
+
+        throwable.printStackTrace();
     }
 }
