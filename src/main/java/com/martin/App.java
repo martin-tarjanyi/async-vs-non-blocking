@@ -17,10 +17,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-/**
- * Hello world!
- *
- */
 public class App 
 {
     private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
@@ -30,13 +26,13 @@ public class App
     public static void main( String[] args ) throws ExecutionException, InterruptedException
     {
         // New threads are created if no thread is available, if there is idle thread then it is reused
-        ExecutorService executorService = Executors.newFixedThreadPool(NUMBER_OF_CONCURRENT_REQUESTS);
+        ExecutorService executorService = Executors.newCachedThreadPool();
 
         RestTemplate restTemplate = createRestTemplate();
 
-        long start = System.currentTimeMillis();
+        System.out.println("Starting to execute " + NUMBER_OF_CONCURRENT_REQUESTS + " requests...");
 
-        System.out.println("Started...");
+        long start = System.currentTimeMillis();
 
         List<Future<?>> futures = new ArrayList<>();
 
