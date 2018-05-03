@@ -2,73 +2,62 @@ package com.martin;
 
 import com.google.common.collect.Sets;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
-/**
- * Hello world!
- */
 public class App
 {
-    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 2000;
+    private static final int NUMBER_OF_CONCURRENT_REQUESTS = 100;
 
     private static final Set<String> THREAD_NAMES = Sets.newConcurrentHashSet();
-    private static final Collection<String> RESULTS = Collections.synchronizedList(new ArrayList<>());
+    private static final CountDownLatch COUNT_DOWN_LATCH = new CountDownLatch(NUMBER_OF_CONCURRENT_REQUESTS);
 
-    public static void main(String[] args)
+    public static void main(String[] args) throws InterruptedException
     {
-        WebClient webClient = createWebClient();
+        WebClient webClient = WebClient.create();
 
-        System.out.println("Started");
+        System.out.println("Started executing " + NUMBER_OF_CONCURRENT_REQUESTS + " requests...");
+
         long start = System.currentTimeMillis();
 
-        for (int i = 0; i < NUMBER_OF_CONCURRENT_REQUESTS; i++)
-        {
-            callSlowEndpoint(webClient);
-        }
+        Flux.range(1, NUMBER_OF_CONCURRENT_REQUESTS)
+            .flatMap(count -> callSlowEndpoint(webClient), NUMBER_OF_CONCURRENT_REQUESTS)
+            .subscribe(body -> handleSuccess(), e -> handleError(e));
 
-        while (RESULTS.size() != NUMBER_OF_CONCURRENT_REQUESTS)
-        {
-            // wait for the calls to finish
-        }
+        COUNT_DOWN_LATCH.await();
 
         long end = System.currentTimeMillis();
 
+        Thread.sleep(1000);
+
         System.out.println("Calls took " + (end - start) + " milliseconds to finish.");
-        System.out.println(THREAD_NAMES.size() + " threads were used.");
+        System.out.println(THREAD_NAMES.size() + " threads were used: " + THREAD_NAMES);
     }
 
-    private static WebClient createWebClient()
+    private static Mono<String> callSlowEndpoint(WebClient webClient)
     {
-        return WebClient.create();
+        return webClient.get()
+                        .uri("http://localhost:8080/slow")
+                        .retrieve()
+                        .bodyToMono(String.class);
     }
 
-    private static void callSlowEndpoint(WebClient webClient)
+    private static void handleSuccess()
     {
-        // non-blocking IO
-        webClient.get()
-                 .uri("http://localhost:8080/slow")
-                 .exchange()
-                 .flatMap(clientResponse -> clientResponse.bodyToMono(String.class))
-                 .subscribe(App::handleSuccess, throwable ->
-                 {
-                     throwable.printStackTrace();
-                     RESULTS.add("error");
-                 });
+        COUNT_DOWN_LATCH.countDown();
+
+        THREAD_NAMES.add(Thread.currentThread().getName());
     }
 
-    private static void handleSuccess(String body)
+    private static void handleError(Throwable throwable)
     {
-        RESULTS.add(body);
+        throwable.printStackTrace();
 
-        String threadName = Thread.currentThread()
-                                  .getName();
+        COUNT_DOWN_LATCH.countDown();
 
-//        System.out.println(threadName);
-
-        THREAD_NAMES.add(threadName);
+        THREAD_NAMES.add(Thread.currentThread().getName());
     }
 }
