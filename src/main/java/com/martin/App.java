@@ -61,12 +61,27 @@ public class App
 
     private static void callSlowEndpoint(CloseableHttpAsyncClient asyncHttpClient)
     {
-        // non-blocking
+        // callback hell
         asyncHttpClient.execute(new HttpGet("http://localhost:8080/slow"), (Callback<HttpResponse>) result ->
         {
-            COUNT_DOWN_LATCH.countDown();
-
             THREAD_NAMES.add(Thread.currentThread().getName());
+
+            asyncHttpClient.execute(new HttpGet("http://localhost:8080/slow?" + result.getStatusLine().getStatusCode()), (Callback<HttpResponse>) result2 ->
+            {
+                THREAD_NAMES.add(Thread.currentThread().getName());
+
+                asyncHttpClient.execute(new HttpGet("http://localhost:8080/slow?" + result2.getStatusLine().getStatusCode()), (Callback<HttpResponse>) result3 ->
+                {
+                    THREAD_NAMES.add(Thread.currentThread().getName());
+
+                    asyncHttpClient.execute(new HttpGet("http://localhost:8080/slow?" + result3.getStatusLine().getStatusCode()), (Callback<HttpResponse>) result4 ->
+                    {
+                        COUNT_DOWN_LATCH.countDown();
+
+                        THREAD_NAMES.add(Thread.currentThread().getName());
+                    });
+                });
+            });
         });
     }
 }
