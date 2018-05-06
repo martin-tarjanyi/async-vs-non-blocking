@@ -1,13 +1,13 @@
 package com.martin;
 
 import com.google.common.collect.Sets;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
 import org.apache.http.impl.nio.reactor.DefaultConnectingIOReactor;
 import org.apache.http.nio.reactor.IOReactorException;
-import org.springframework.http.client.HttpComponentsAsyncClientHttpRequestFactory;
-import org.springframework.web.client.AsyncRestTemplate;
 
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -22,59 +22,51 @@ public class App
 
     public static void main(String[] args) throws Exception
     {
-        AsyncRestTemplate asyncRestTemplate = createAsyncRestTemplate();
+        CloseableHttpAsyncClient asyncHttpClient = createAsyncAndNonBlockingHttpClient();
 
         System.out.println("Started executing " + NUMBER_OF_CONCURRENT_REQUESTS + " requests...");
+
         long start = System.currentTimeMillis();
 
         for (int i = 0; i < NUMBER_OF_CONCURRENT_REQUESTS; i++)
         {
-            callSlowEndpoint(asyncRestTemplate);
+            callSlowEndpoint(asyncHttpClient);
         }
 
         COUNT_DOWN_LATCH.await();
 
         long end = System.currentTimeMillis();
 
+        asyncHttpClient.close();
+
         System.out.println("Calls took " + (end - start) + " milliseconds to finish.");
         System.out.println(THREAD_NAMES.size() + " threads were used: " + THREAD_NAMES);
     }
 
-    private static AsyncRestTemplate createAsyncRestTemplate() throws IOReactorException
+    private static CloseableHttpAsyncClient createAsyncAndNonBlockingHttpClient() throws IOReactorException
     {
         PoolingNHttpClientConnectionManager connectionManager = new PoolingNHttpClientConnectionManager(
-                new DefaultConnectingIOReactor());
+            new DefaultConnectingIOReactor());
 
         connectionManager.setMaxTotal(NUMBER_OF_CONCURRENT_REQUESTS);
         connectionManager.setDefaultMaxPerRoute(NUMBER_OF_CONCURRENT_REQUESTS);
 
-        CloseableHttpAsyncClient httpclient = HttpAsyncClientBuilder.create()
-                                                                    .setConnectionManager(connectionManager)
-                                                                    .build();
+        CloseableHttpAsyncClient asyncHttpClient = HttpAsyncClientBuilder.create()
+                                                                         .setConnectionManager(connectionManager)
+                                                                         .build();
+        asyncHttpClient.start();
 
-        return new AsyncRestTemplate(new HttpComponentsAsyncClientHttpRequestFactory(httpclient));
+        return asyncHttpClient;
     }
 
-    private static void callSlowEndpoint(AsyncRestTemplate asyncRestTemplate)
+    private static void callSlowEndpoint(CloseableHttpAsyncClient asyncHttpClient)
     {
         // non-blocking
-        asyncRestTemplate.getForEntity("http://localhost:8080/slow", String.class)
-                         .addCallback(response -> handleSuccess(), e -> handleError(e));
-    }
+        asyncHttpClient.execute(new HttpGet("http://localhost:8080/slow"), (Callback<HttpResponse>) result ->
+        {
+            COUNT_DOWN_LATCH.countDown();
 
-    private static void handleSuccess()
-    {
-        COUNT_DOWN_LATCH.countDown();
-
-        String threadName = Thread.currentThread().getName();
-
-        THREAD_NAMES.add(threadName);
-    }
-
-    private static void handleError(Throwable throwable)
-    {
-        COUNT_DOWN_LATCH.countDown();
-
-        throwable.printStackTrace();
+            THREAD_NAMES.add(Thread.currentThread().getName());
+        });
     }
 }
