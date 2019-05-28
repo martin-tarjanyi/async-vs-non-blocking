@@ -17,19 +17,26 @@ public class App
     {
         WebClient webClient = WebClient.create();
 
+        warmUp(webClient);
+
         System.out.println("Started executing " + NUMBER_OF_CONCURRENT_REQUESTS + " requests...");
 
         long start = System.currentTimeMillis();
 
         Flux.range(1, NUMBER_OF_CONCURRENT_REQUESTS)
-            .flatMap(count -> callSlowEndpoint(webClient))
-            .doOnEach(response -> THREAD_NAMES.add(Thread.currentThread().getName()))
+            .flatMap(count -> callSlowEndpoint(webClient), NUMBER_OF_CONCURRENT_REQUESTS)
+            .doOnNext(response -> THREAD_NAMES.add(Thread.currentThread().getName()))
             .blockLast(); // do NOT block in production code, this is just for demonstration purposes
 
         long end = System.currentTimeMillis();
 
         System.out.println("Calls took " + (end - start) + " milliseconds to finish.");
         System.out.println(THREAD_NAMES.size() + " threads were used: " + THREAD_NAMES);
+    }
+
+    private static void warmUp(WebClient webClient)
+    {
+        Mono.zip(callSlowEndpoint(webClient), callSlowEndpoint(webClient)).block();
     }
 
     private static Mono<String> callSlowEndpoint(WebClient webClient)
